@@ -1,0 +1,19 @@
+name: internet_sentry
+description: A production-ready Flutter package for detecting actual internet reachability and automatically providing customizable offline UI.
+version: 1.0.0
+homepage: https://github.com/IMMANUEL-88/internet_sentry
+
+environment:
+  sdk: ^3.12.1
+  flutter: ">=3.44.1"
+
+dependencies:
+  connectivity_plus: ^7.3.1
+  flutter:
+    sdk: flutter
+  web: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
