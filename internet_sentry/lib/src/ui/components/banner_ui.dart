@@ -8,11 +8,13 @@ import '../models/offline_ui.dart';
 class BannerWidget extends StatefulWidget {
   final InternetStatus status;
   final BannerOfflineUI config;
+  final Widget child;
 
   const BannerWidget({
     super.key,
     required this.status,
     required this.config,
+    required this.child,
   });
 
   @override
@@ -22,6 +24,18 @@ class BannerWidget extends StatefulWidget {
 class _BannerWidgetState extends State<BannerWidget> {
   bool _isVisible = false;
   Timer? _dismissTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.status != InternetStatus.connected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _isVisible = true);
+        }
+      });
+    }
+  }
 
   @override
   void didUpdateWidget(covariant BannerWidget oldWidget) {
@@ -88,45 +102,68 @@ class _BannerWidgetState extends State<BannerWidget> {
         break;
     }
 
-    return AnimatedPositioned(
-      duration: widget.config.animationDuration,
-      curve: Curves.easeInOut,
-      top: _isVisible ? 0 : -150, // Slide off screen when hidden
-      left: 0,
-      right: 0,
+    Widget bannerContent = Material(
+      color: backgroundColor,
       child: SafeArea(
         bottom: false,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: backgroundColor,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  iconData,
-                  color: widget.config.iconColor ?? Colors.white,
-                  size: widget.config.iconSize ?? 20,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                iconData,
+                color: widget.config.iconColor ?? Colors.white,
+                size: widget.config.iconSize ?? 20,
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  message,
+                  style:
+                      widget.config.textStyle ??
+                      const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    message,
-                    style: widget.config.textStyle ??
-                        const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+
+    if (widget.config.pushDown) {
+      return Column(
+        children: [
+          AnimatedSize(
+            duration: widget.config.animationDuration,
+            curve: Curves.easeInOut,
+            alignment: Alignment.topCenter,
+            child: _isVisible
+                ? bannerContent
+                : const SizedBox(width: double.infinity, height: 0),
+          ),
+          Expanded(child: widget.child),
+        ],
+      );
+    }
+
+    return Stack(
+      children: [
+        widget.child,
+        AnimatedPositioned(
+          duration: widget.config.animationDuration,
+          curve: Curves.easeInOut,
+          top: _isVisible ? 0 : -150,
+          left: 0,
+          right: 0,
+          child: bannerContent,
+        ),
+      ],
     );
   }
 }

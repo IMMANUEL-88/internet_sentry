@@ -1,26 +1,22 @@
 import 'package:flutter/material.dart';
-
+import '../core/internet_status.dart';
 import '../core/internet_checker_config.dart';
 import '../core/internet_controller.dart';
 import 'models/offline_ui.dart';
 
-/// A wrapper that monitors internet connectivity and automatically displays
-/// the configured offline UI when the connection is lost.
 class InternetWrapper extends StatefulWidget {
-  /// The main application widget (typically the Navigator provided by MaterialApp.builder).
   final Widget child;
-
-  /// The UI configuration to display when offline (e.g., OfflineUI.banner()).
   final OfflineUI offlineUI;
-
-  /// An optional external controller. If null, the wrapper manages its own internal controller.
   final InternetController? controller;
-
-  // Optional configurations if using the internal controller
   final bool autoRetry;
   final Duration retryInterval;
   final Duration debounceDuration;
   final InternetCheckerConfig checkerConfig;
+  final bool showRestoredSnackbar;
+  final String restoredSnackbarMessage;
+  final Color restoredSnackbarColor;
+  final TextStyle? restoredSnackbarTextStyle;
+  final SnackBar? customRestoredSnackbar;
   final VoidCallback? onConnectionLost;
   final VoidCallback? onConnectionRestored;
 
@@ -33,6 +29,11 @@ class InternetWrapper extends StatefulWidget {
     this.retryInterval = const Duration(seconds: 3),
     this.debounceDuration = const Duration(milliseconds: 500),
     this.checkerConfig = const InternetCheckerConfig(),
+    this.showRestoredSnackbar = true,
+    this.restoredSnackbarMessage = 'Internet restored!',
+    this.restoredSnackbarColor = Colors.green,
+    this.restoredSnackbarTextStyle,
+    this.customRestoredSnackbar,
     this.onConnectionLost,
     this.onConnectionRestored,
   });
@@ -44,11 +45,11 @@ class InternetWrapper extends StatefulWidget {
 class _InternetWrapperState extends State<InternetWrapper> {
   late final InternetController _controller;
   bool _isInternalController = false;
+  InternetStatus _previousStatus = InternetStatus.connected;
 
   @override
   void initState() {
     super.initState();
-    // Use the provided controller, or create an internal one
     if (widget.controller != null) {
       _controller = widget.controller!;
     } else {
@@ -62,11 +63,48 @@ class _InternetWrapperState extends State<InternetWrapper> {
         onConnectionRestored: widget.onConnectionRestored,
       );
     }
+
+    _previousStatus = _controller.value;
+    _controller.addListener(_onStatusChanged);
+  }
+
+  void _onStatusChanged() {
+    final status = _controller.value;
+
+    if (status == InternetStatus.connected &&
+        (_previousStatus == InternetStatus.disconnected ||
+            _previousStatus == InternetStatus.restoring)) {
+      if (widget.showRestoredSnackbar && mounted) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        messenger?.clearSnackBars();
+        if (widget.customRestoredSnackbar != null) {
+          messenger?.showSnackBar(widget.customRestoredSnackbar!);
+        } else {
+          messenger?.showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.restoredSnackbarMessage,
+                style:
+                    widget.restoredSnackbarTextStyle ??
+                    const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              backgroundColor: widget.restoredSnackbarColor,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    }
+    _previousStatus = status;
   }
 
   @override
   void dispose() {
-    // Only dispose the controller if we created it ourselves
+    _controller.removeListener(_onStatusChanged);
     if (_isInternalController) {
       _controller.dispose();
     }
@@ -75,27 +113,19 @@ class _InternetWrapperState extends State<InternetWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    // We use a Stack so the offline UI floats securely over the main app.
-    // Directionality ensures our UI elements render correctly even if placed extremely high in the widget tree.
     return Directionality(
       textDirection: TextDirection.ltr,
-      child: Stack(
-        children: [
-          // 1. The underlying application
-          widget.child,
-
-          // 2. The reactive Offline UI layer
-          ValueListenableBuilder(
-            valueListenable: _controller,
-            builder: (context, status, child) {
-              return widget.offlineUI.buildWidget(
-                context,
-                status,
-                _controller,
-              );
-            },
-          ),
-        ],
+      child: ValueListenableBuilder<InternetStatus>(
+        valueListenable: _controller,
+        child: widget.child,
+        builder: (context, status, child) {
+          return widget.offlineUI.buildWidget(
+            context,
+            status,
+            _controller,
+            child!,
+          );
+        },
       ),
     );
   }

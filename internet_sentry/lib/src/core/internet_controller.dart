@@ -6,7 +6,7 @@ import 'internet_checker_config.dart';
 import 'internet_status.dart';
 import 'retry_manager.dart';
 
-class InternetController extends ValueNotifier {
+class InternetController extends ValueNotifier<InternetStatus> {
   final bool autoRetry;
   final VoidCallback? onConnectionLost;
   final VoidCallback? onConnectionRestored;
@@ -24,7 +24,7 @@ class InternetController extends ValueNotifier {
     this.onConnectionLost,
     this.onConnectionRestored,
     this.onStatusChanged,
-  }) : super(InternetStatus.checking) {
+  }) : super(InternetStatus.connected) {
     
     _connectionManager = ConnectionManager(
       config: config,
@@ -35,12 +35,10 @@ class InternetController extends ValueNotifier {
 
     _retryManager = RetryManager(
       interval: retryInterval,
-      // FIX: Background retries are NOT manual
       onRetry: () => _connectionManager.checkNow(isManual: false), 
     );
 
     _lifecycleHandler = AppLifecycleHandler(
-      // FIX: Lifecycle resumes are NOT manual
       onResumed: () => _connectionManager.checkNow(isManual: false),
     );
 
@@ -49,9 +47,8 @@ class InternetController extends ValueNotifier {
 
   bool get isConnected => value == InternetStatus.connected;
 
-  // FIX: User clicking a button IS manual
-  Future retry() async {
-    await _connectionManager.checkNow(isManual: true);
+  Future<bool> retry() async {
+    return await _connectionManager.checkNow(isManual: true);
   }
 
   void _startServices() {
@@ -60,16 +57,12 @@ class InternetController extends ValueNotifier {
     _connectionManager.checkNow(isManual: false); 
   }
 
-  // FIX: Listen to the flag
   void _onCheckInitiated(bool isManual) {
-    // If this is a background check (auto-retry), we do NOT want to change the UI state.
-    // This prevents the UI from flickering between "Disconnected" and "Restoring...".
     if (!isManual) return;
 
     if (value == InternetStatus.disconnected) {
       _updateStatus(InternetStatus.restoring);
     } else if (value == InternetStatus.connected) {
-      // Ignored: No flickering if online
     } else {
       _updateStatus(InternetStatus.checking);
     }

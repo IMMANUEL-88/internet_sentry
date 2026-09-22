@@ -1,5 +1,4 @@
-import 'package:flutter/widgets.dart';
-
+import 'package:flutter/material.dart';
 import '../../core/internet_controller.dart';
 import '../../core/internet_status.dart';
 import '../components/banner_ui.dart';
@@ -8,7 +7,15 @@ import '../components/page_ui.dart';
 import '../components/toast_ui.dart';
 
 /// Positions available for the floating toast UI.
-enum ToastPosition { top, center, bottom }
+enum ToastPosition {
+  top,
+  center,
+  bottom,
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
+}
 
 /// Signature for custom offline UI builders.
 typedef OfflineWidgetBuilder =
@@ -16,6 +23,7 @@ typedef OfflineWidgetBuilder =
       BuildContext context,
       InternetStatus status,
       VoidCallback retry,
+      // Widget child,
     );
 
 /// Base configuration class for defining how the offline UI should look and behave.
@@ -33,7 +41,8 @@ abstract class OfflineUI {
     Duration animationDuration,
     bool showBackOnlineNotification,
     Color? iconColor,
-    double? iconSize
+    double? iconSize,
+    bool pushDown,
   }) = BannerOfflineUI;
 
   factory OfflineUI.toast({
@@ -44,16 +53,22 @@ abstract class OfflineUI {
     Color? backgroundColor,
     TextStyle? textStyle,
     Duration animationDuration,
+    Color? iconColor,
+    double? iconSize,
   }) = ToastOfflineUI;
 
   factory OfflineUI.overlay({
     String message,
     bool showRetryButton,
-    bool blockInteraction,
     double opacity,
     double blur,
     Color? backgroundColor,
     TextStyle? textStyle,
+    Color? iconColor,
+    double? iconSize,
+    ButtonStyle? buttonStyle,
+    String? retryFailedMessage,
+    Color? retryFailedMessageColor,
   }) = OverlayOfflineUI;
 
   /// Displays a full-screen offline page that hides the underlying application.
@@ -65,17 +80,23 @@ abstract class OfflineUI {
     Color? backgroundColor,
     TextStyle? titleStyle,
     TextStyle? messageStyle,
+    ButtonStyle? buttonStyle,
+    String? retryFailedMessage,
+    Color? retryFailedMessageColor,
   }) = PageOfflineUI;
 
   /// Allows complete customization of the offline UI.
-  factory OfflineUI.custom({required OfflineWidgetBuilder builder}) =
-      CustomOfflineUI;
+  factory OfflineUI.custom({
+    required OfflineWidgetBuilder builder,
+    Color? backgroundColor,
+  }) = CustomOfflineUI;
 
   /// Internal method used by the wrapper to render the configured UI.
   Widget buildWidget(
     BuildContext context,
     InternetStatus status,
     InternetController controller,
+    Widget child,
   );
 }
 
@@ -92,6 +113,7 @@ class BannerOfflineUI extends OfflineUI {
   final bool showBackOnlineNotification;
   final Color? iconColor;
   final double? iconSize;
+  final bool pushDown;
 
   const BannerOfflineUI({
     this.disconnectedMessage = 'No internet connection',
@@ -105,6 +127,7 @@ class BannerOfflineUI extends OfflineUI {
     this.showBackOnlineNotification = true,
     this.iconColor,
     this.iconSize,
+    this.pushDown = false,
   });
 
   @override
@@ -112,8 +135,9 @@ class BannerOfflineUI extends OfflineUI {
     BuildContext context,
     InternetStatus status,
     InternetController controller,
+    Widget child,
   ) {
-    return BannerWidget(status: status, config: this);
+    return BannerWidget(status: status, config: this, child: child);
   }
 }
 
@@ -126,6 +150,8 @@ class ToastOfflineUI extends OfflineUI {
   final Color? backgroundColor;
   final TextStyle? textStyle;
   final Duration animationDuration;
+  final Color? iconColor;
+  final double? iconSize;
 
   const ToastOfflineUI({
     this.message = 'No internet connection',
@@ -135,6 +161,8 @@ class ToastOfflineUI extends OfflineUI {
     this.backgroundColor,
     this.textStyle,
     this.animationDuration = const Duration(milliseconds: 300),
+    this.iconColor,
+    this.iconSize,
   });
 
   @override
@@ -142,8 +170,9 @@ class ToastOfflineUI extends OfflineUI {
     BuildContext context,
     InternetStatus status,
     InternetController controller,
+    Widget child,
   ) {
-    return ToastWidget(status: status, config: this);
+    return ToastWidget(status: status, config: this, child: child);
   }
 }
 
@@ -151,20 +180,28 @@ class ToastOfflineUI extends OfflineUI {
 class OverlayOfflineUI extends OfflineUI {
   final String message;
   final bool showRetryButton;
-  final bool blockInteraction;
+  final String? retryFailedMessage;
   final double opacity;
   final double blur;
   final Color? backgroundColor;
   final TextStyle? textStyle;
+  final Color? iconColor;
+  final double? iconSize;
+  final ButtonStyle? buttonStyle;
+  final Color? retryFailedMessageColor;
 
   const OverlayOfflineUI({
     this.message = 'No internet connection',
     this.showRetryButton = true,
-    this.blockInteraction = false,
+    this.retryFailedMessage,
     this.opacity = 0.7,
     this.blur = 2.0,
     this.backgroundColor,
     this.textStyle,
+    this.iconColor,
+    this.iconSize,
+    this.buttonStyle,
+    this.retryFailedMessageColor,
   });
 
   @override
@@ -172,8 +209,14 @@ class OverlayOfflineUI extends OfflineUI {
     BuildContext context,
     InternetStatus status,
     InternetController controller,
+    Widget child,
   ) {
-    return OverlayWidget(status: status, config: this, controller: controller);
+    return OverlayWidget(
+      status: status,
+      config: this,
+      controller: controller,
+      child: child,
+    );
   }
 }
 
@@ -182,19 +225,25 @@ class PageOfflineUI extends OfflineUI {
   final String title;
   final String message;
   final bool showRetryButton;
+  final String? retryFailedMessage;
   final Widget? customIcon;
   final Color? backgroundColor;
   final TextStyle? titleStyle;
   final TextStyle? messageStyle;
+  final ButtonStyle? buttonStyle;
+  final Color? retryFailedMessageColor;
 
   const PageOfflineUI({
     this.title = 'You are offline',
     this.message = 'Please check your internet connection.',
     this.showRetryButton = true,
+    this.retryFailedMessage,
     this.customIcon,
     this.backgroundColor,
     this.titleStyle,
     this.messageStyle,
+    this.buttonStyle,
+    this.retryFailedMessageColor,
   });
 
   @override
@@ -202,24 +251,54 @@ class PageOfflineUI extends OfflineUI {
     BuildContext context,
     InternetStatus status,
     InternetController controller,
+    Widget child,
   ) {
-    return PageWidget(status: status, config: this, controller: controller);
+    return PageWidget(
+      status: status,
+      config: this,
+      controller: controller,
+      child: child,
+    );
   }
 }
 
 // --- CUSTOM CONFIG (NEW) ---
 class CustomOfflineUI extends OfflineUI {
   final OfflineWidgetBuilder builder;
+  final Duration animationDuration;
+  final Color? backgroundColor;
 
-  const CustomOfflineUI({required this.builder});
+  const CustomOfflineUI({
+    required this.builder,
+    this.animationDuration = const Duration(milliseconds: 300),
+    this.backgroundColor,
+  });
 
   @override
   Widget buildWidget(
     BuildContext context,
     InternetStatus status,
     InternetController controller,
+    Widget child,
   ) {
-    // We simply execute the user's builder function, passing the required parameters.
-    return builder(context, status, () => controller.retry());
+    final isVisible = status != InternetStatus.connected;
+    return Stack(
+      children: [
+        child,
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !isVisible,
+            child: AnimatedOpacity(
+              opacity: isVisible ? 1.0 : 0.0,
+              duration: animationDuration,
+              child: Material(
+                color: backgroundColor ?? Colors.transparent,
+                child: builder(context, status, () => controller.retry()),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

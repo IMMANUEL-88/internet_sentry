@@ -6,7 +6,7 @@ import 'internet_checker_config.dart';
 class ConnectionManager {
   final Connectivity _connectivity = Connectivity();
   final InternetReachabilityChecker _checker = InternetReachabilityChecker();
-  
+
   final InternetCheckerConfig config;
   final Duration debounceDuration;
   final void Function(bool isManual) onCheckInitiated;
@@ -24,7 +24,9 @@ class ConnectionManager {
   });
 
   void start() {
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((results) {
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
+      results,
+    ) {
       _handleNetworkChange(results);
     });
   }
@@ -34,9 +36,9 @@ class ConnectionManager {
     _connectivitySubscription?.cancel();
   }
 
-  Future checkNow({bool isManual = false}) async {
+  Future<bool> checkNow({bool isManual = false}) async {
     _debounceTimer?.cancel();
-    await _performCheck(isManual: isManual);
+    return await _performCheck(isManual: isManual);
   }
 
   void _handleNetworkChange(List results) {
@@ -47,18 +49,22 @@ class ConnectionManager {
     }
 
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(debounceDuration, () => _performCheck(isManual: false));
+    _debounceTimer = Timer(
+      debounceDuration,
+      () => _performCheck(isManual: false),
+    );
   }
 
-  Future _performCheck({bool isManual = false}) async {
-    if (_isChecking) return;
-    
+  Future<bool> _performCheck({bool isManual = false}) async {
+    if (_isChecking) return false;
+
     _isChecking = true;
     onCheckInitiated(isManual);
 
     final hasInternet = await _checker.hasInternetAccess(config);
-    
+
     _isChecking = false;
     onCheckCompleted(hasInternet);
+    return hasInternet;
   }
 }
